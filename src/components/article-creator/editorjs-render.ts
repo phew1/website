@@ -29,8 +29,27 @@ export const katexMacros = {
   "\\qty": "#1\\,\\mathrm{#2}",
 };
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 // derived from advancedtextbox
-function parseLatex(text: string): string {
+//
+// `transformText` is applied to the non-LaTeX segments only. Paragraphs, headers
+// and list items legitimately store EditorJS inline markup (<b>, <mark>, <a>, an
+// inline toolbar is enabled on all three), so they pass it through untouched.
+// Table cells have no inline toolbar and are plain text, so the table parser
+// passes `escapeHtml`. That has to happen in here rather than around the result,
+// or it would escape KaTeX's own generated HTML too.
+function parseLatex(
+  text: string,
+  transformText: (part: string) => string = (part) => part,
+): string {
   const decoded = decodeEntities(text);
 
   return decoded
@@ -44,7 +63,7 @@ function parseLatex(text: string): string {
           macros: katexMacros,
         });
       }
-      return part;
+      return transformText(part);
     })
     .join("");
 }
@@ -140,24 +159,28 @@ const customParsers: Record<
     if (content.length === 0) {
       return "<table></table>";
     }
+    const cellClass = "border border-black px-3 py-1.5 text-center";
     const rows = content.map((row, index) => {
       if (withHeadings && index === 0) {
-        return `<tr class="divide-x-[1px]">${row.reduce(
-          (acc, cell) => acc + `<th>${parseLatex(cell)}</th>`,
+        return `<tr>${row.reduce(
+          (acc, cell) =>
+            acc +
+            `<th class="${cellClass}">${parseLatex(cell, escapeHtml)}</th>`,
           "",
         )}</tr>`;
       }
 
       // For other rows, use <td> tags
-      return `<tr class="divide-x-[1px]">${row.reduce(
-        (acc, cell) => acc + `<td>${parseLatex(cell)}</td>`,
+      return `<tr>${row.reduce(
+        (acc, cell) =>
+          acc + `<td class="${cellClass}">${parseLatex(cell, escapeHtml)}</td>`,
         "",
       )}</tr>`;
     });
     const thead = withHeadings ? `<thead>${rows.shift()}</thead>` : "";
     const tbody = `<tbody>${rows.join("")}</tbody>`;
 
-    return `<table>${thead}${tbody}</table>`;
+    return `<div class="overflow-x-auto" tabindex="0" role="region" aria-label="Scrollable table"><table class="border-collapse border border-black">${thead}${tbody}</table></div>`;
   },
 
   list: (data, _config) => {
