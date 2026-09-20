@@ -4,6 +4,7 @@ import { RenderContent } from "@/components/article-creator/custom_questions/Ren
 import { getPartEarnedPoints } from "@/lib/frq/gradingView";
 import type { PartGrade } from "@/lib/frq/gradingView";
 import {
+  getCriterionDescriptionHtml,
   getPartPoints,
   stripResponseHtml,
   toQuestionInput,
@@ -104,8 +105,11 @@ const GradingPartCard = ({
             // printed: the description is authored in the same rich editor the
             // prompts use, and printing it raw would show `<div>` to the one
             // reader who has to compare it against the student's work.
+            // Resolved through the shared helper, so a plain-text rubric
+            // line is escaped rather than parsed as the markup it resembles.
+            const descriptionHtml = getCriterionDescriptionHtml(criterion);
             const hasDescription =
-              stripResponseHtml(criterion.description).length > 0 ||
+              stripResponseHtml(descriptionHtml).length > 0 ||
               (criterion.descriptionFiles?.length ?? 0) > 0;
 
             return (
@@ -119,7 +123,7 @@ const GradingPartCard = ({
                   {hasDescription ? (
                     <RenderContent
                       content={toQuestionInput(
-                        criterion.description,
+                        descriptionHtml,
                         criterion.descriptionFiles,
                       )}
                       origin="question"
@@ -136,7 +140,7 @@ const GradingPartCard = ({
                     max={criterion.points}
                     step={1}
                     aria-label={`Points for ${
-                      stripResponseHtml(criterion.description) || "criterion"
+                      stripResponseHtml(descriptionHtml) || "criterion"
                     }`}
                     value={grade?.criteria[criterion.id] ?? 0}
                     onChange={(event) =>

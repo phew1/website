@@ -26,6 +26,10 @@ export default function RubricCriteriaRow({
   // to render its text and files the way the prompt above it is rendered.
   // Printing `criterion.text` raw would also show the `<div>`s the editor's
   // rich-text field writes.
+  //
+  // `text` arrives already resolved to HTML by `buildFeedbackDocument`, which
+  // escapes a plain-text rubric line rather than letting the sanitizer read
+  // it as markup. Nothing here re-escapes it.
   const hasDescription =
     stripResponseHtml(criterion.text).length > 0 || criterion.files.length > 0;
 

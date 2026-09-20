@@ -7,7 +7,9 @@ import {
 import {
   LEGACY_QUESTION_ID,
   getAllParts,
+  getCriterionDescriptionHtml,
   normalizeFrqTemplate,
+  stripResponseHtml,
 } from "../src/lib/frq/template.ts";
 
 const identity = { id: "t1", subject: "calc", unitId: "u1" };
@@ -52,7 +54,11 @@ const legacyDocument = {
       prompt: "<p>Justify your answer.</p>",
       answerType: "equation",
       status: "public",
-      criteria: [{ id: "crit-2", description: "Valid reasoning", points: 3 }],
+      criteria: [
+        // Authored in the old plain-text box, before the rubric editor
+        // became rich text. Nothing marks it as HTML because nothing could.
+        { id: "crit-2", description: "Shows that x<y & a<b", points: 3 },
+      ],
     },
     {
       id: "part-ghi789",
@@ -143,9 +149,11 @@ test("round trip: a criterion keeps its rubric text and model image", () => {
     ["crit-1", "crit-2"],
     "criterion ids must survive the round trip, since grades resolve through them",
   );
+  // crit-2 is the plain-text line, so it comes back escaped and marked as
+  // HTML. Its own round trip is asserted below; here only that it survives.
   assert.deepEqual(
     criteria.map((criterion) => criterion.description),
-    ["Correct value", "Valid reasoning"],
+    ["Correct value", "Shows that x&lt;y &amp; a&lt;b"],
   );
   // The picture a graph part is scored against has to come back out of the
   // editor. Dropping it here would leave the file in Storage and the rubric
@@ -155,5 +163,43 @@ test("round trip: a criterion keeps its rubric text and model image", () => {
       (criterion.descriptionFiles ?? []).map((file) => file.key),
     ),
     [["image-model.png"], []],
+  );
+});
+
+test("round trip: a plain-text rubric line is not eaten by the rich editor", () => {
+  const loaded = normalizeFrqTemplate(legacyDocument, identity);
+  const reloaded = normalizeFrqTemplate(simulateEditorSave(loaded), identity);
+
+  const criterion = getAllParts(reloaded)
+    .flatMap((part) => part.criteria ?? [])
+    .find((entry) => entry.id === "crit-2");
+
+  // Opening the editor and pressing Save promotes the line to HTML, which is
+  // the point of the marker: it is escaped once, on the way in, and never
+  // again. Re-escaping on every save would creep towards "x&amp;lt;y".
+  assert.equal(criterion?.descriptionFormat, "html");
+  assert.equal(criterion?.description, "Shows that x&lt;y &amp; a&lt;b");
+
+  // The invariant that matters: what a grader and a student read is the text
+  // the author typed, before the save and after it.
+  assert.equal(
+    stripResponseHtml(getCriterionDescriptionHtml(criterion!)),
+    "Shows that x<y & a<b",
+  );
+});
+
+test("round trip is idempotent for a promoted rubric line", () => {
+  const once = normalizeFrqTemplate(legacyDocument, identity);
+  const twice = normalizeFrqTemplate(simulateEditorSave(once), identity);
+  const thrice = normalizeFrqTemplate(simulateEditorSave(twice), identity);
+
+  // A second save must not escape the escapes.
+  assert.deepEqual(
+    getAllParts(thrice).flatMap((part) =>
+      (part.criteria ?? []).map((criterion) => criterion.description),
+    ),
+    getAllParts(twice).flatMap((part) =>
+      (part.criteria ?? []).map((criterion) => criterion.description),
+    ),
   );
 });

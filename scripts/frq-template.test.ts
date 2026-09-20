@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   LEGACY_QUESTION_ID,
   getAllParts,
+  getCriterionDescriptionHtml,
   getPartLabel,
   getStudentFacingParts,
   getStudentFacingQuestions,
@@ -364,4 +365,88 @@ test("a criterion's images are normalized like any other file list", () => {
     [],
     "a criterion that predates images reads back with an empty list, not undefined",
   );
+});
+
+/**
+ * The rubric editor became a rich-text field, which changed what a stored
+ * `description` means. Every criterion written before that is plain text, and
+ * reading one as HTML does not merely restyle it: an allowed tag is swallowed
+ * and an unknown one takes the rest of the line with it. `descriptionFormat`
+ * is what keeps the two apart, and absent has to mean plain text, because that
+ * is what every document predating the field holds.
+ */
+test("a plain-text criterion is escaped, not read as the markup it resembles", () => {
+  const out = normalizeFrqTemplate(
+    {
+      questions: [
+        {
+          id: "p1",
+          criteria: [
+            // An allowed tag: read as HTML this renders a bold "d" and the
+            // "<b>" the author typed disappears.
+            { id: "c1", description: "a<b>d", points: 1 },
+            // An unknown tag: read as HTML the sanitizer drops it and
+            // everything it appears to open, losing the rest of the line.
+            { id: "c2", description: "Shows that x<y for all n", points: 1 },
+            { id: "c3", description: "Uses p & q", points: 1 },
+          ],
+        },
+      ],
+    },
+    { id: "t1", subject: "calc", unitId: "u1" },
+  );
+
+  const criteria = out.questions[0]?.parts[0]?.criteria ?? [];
+
+  assert.deepEqual(criteria.map(getCriterionDescriptionHtml), [
+    "a&lt;b&gt;d",
+    "Shows that x&lt;y for all n",
+    "Uses p &amp; q",
+  ]);
+
+  // What the reader ends up seeing is the text the author typed.
+  assert.deepEqual(
+    criteria.map((criterion) =>
+      stripResponseHtml(getCriterionDescriptionHtml(criterion)),
+    ),
+    ["a<b>d", "Shows that x<y for all n", "Uses p & q"],
+  );
+});
+
+test("a criterion the rich editor wrote is passed through as HTML", () => {
+  const out = normalizeFrqTemplate(
+    {
+      questions: [
+        {
+          id: "p1",
+          criteria: [
+            {
+              id: "c1",
+              description: "Sketches <strong>both</strong> asymptotes",
+              descriptionFormat: "html",
+              points: 2,
+            },
+            // Not the marker, so it falls back to plain text. Guessing "this
+            // looks like HTML" is what the marker exists to avoid.
+            {
+              id: "c2",
+              description: "a<b>d",
+              descriptionFormat: "richtext",
+              points: 1,
+            },
+          ],
+        },
+      ],
+    },
+    { id: "t1", subject: "calc", unitId: "u1" },
+  );
+
+  const criteria = out.questions[0]?.parts[0]?.criteria ?? [];
+
+  assert.equal(
+    getCriterionDescriptionHtml(criteria[0]!),
+    "Sketches <strong>both</strong> asymptotes",
+  );
+  assert.equal(criteria[1]?.descriptionFormat, undefined);
+  assert.equal(getCriterionDescriptionHtml(criteria[1]!), "a&lt;b&gt;d");
 });

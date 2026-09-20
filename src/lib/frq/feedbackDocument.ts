@@ -2,7 +2,12 @@ import type { FRQFeedbackDocument } from "@/components/frq/feedback/types";
 import type { FRQTemplate, GradedFRQSubmission } from "@/types/frq";
 import type { Timestamp } from "firebase/firestore";
 import { buildGradingQuestions } from "./gradingView.ts";
-import { getAllParts, isMultiQuestion, toQuestionInput } from "./template.ts";
+import {
+  getAllParts,
+  getCriterionDescriptionHtml,
+  isMultiQuestion,
+  toQuestionInput,
+} from "./template.ts";
 
 const formatTimestamp = (value: Timestamp | undefined) => {
   if (!value || typeof value.toDate !== "function") {
@@ -119,7 +124,10 @@ export const buildFeedbackDocument = (
         answerType: part.answerType ?? "text",
         gradingCriteria: (part.criteria ?? []).map((criterion) => ({
           id: criterion.id,
-          text: criterion.description,
+          // Already resolved to HTML here rather than in the row that renders
+          // it: the student's rubric and the grader's must read a stored
+          // description the same way, and this is the shared decision.
+          text: getCriterionDescriptionHtml(criterion),
           // Carried through so the rubric a student reads is the one the
           // grader marked against, model graph included.
           files: criterion.descriptionFiles ?? [],

@@ -27,6 +27,15 @@ export interface FRQGradingCriterion {
    * awards against rather than in the prompt the student already answered.
    */
   descriptionFiles?: QuestionFile[];
+  /**
+   * Which language `description` is written in. Absent means plain text, as
+   * every criterion authored before the rubric editor became rich text was:
+   * those descriptions contain bare `<` and `&` that would otherwise be read
+   * as markup, so a rubric line reading "x<y" would lose everything from the
+   * `<` onwards. Present means the rich editor wrote it and it is already
+   * escaped. Never inferred from the text — the two are indistinguishable.
+   */
+  descriptionFormat?: "html";
   points: number;
 }
 

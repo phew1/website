@@ -10,6 +10,7 @@ import type { QuestionFormat, QuestionInput } from "@/types/questions";
 import type { CalculatorPermission, CalculatorType } from "@/lib/calculator";
 import {
   DEFAULT_TIME_LIMIT_MINUTES,
+  getCriterionDescriptionHtml,
   getPartLabel,
   getPartPoints,
   makeId,
@@ -102,8 +103,14 @@ const toEditorCriterion = (
   criterion: FRQGradingCriterion,
 ): EditorCriterion => ({
   id: criterion.id,
+  // Escaped on the way in when the stored text is plain, so the rich editor
+  // shows a legacy "x<y" as the author typed it rather than eating the tag it
+  // looks like. Saving then writes it back as HTML, marked as such.
   description: createQuestionData(
-    toQuestionInput(criterion.description, criterion.descriptionFiles),
+    toQuestionInput(
+      getCriterionDescriptionHtml(criterion),
+      criterion.descriptionFiles,
+    ),
   ),
   points: criterion.points,
 });
@@ -118,6 +125,9 @@ const toStoredCriterion = (
   id: criterion.id,
   description: criterion.description.question.value,
   descriptionFiles: criterion.description.question.files,
+  // Everything this editor writes is the rich field's HTML, including a
+  // legacy description it escaped on load, so the marker is unconditional.
+  descriptionFormat: "html",
   points: criterion.points,
 });
 

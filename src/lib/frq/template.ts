@@ -84,6 +84,13 @@ const normalizeCriteria = (value: unknown): FRQGradingCriterion[] => {
         id: asString(record.id) || `criterion-${index}`,
         description: asString(record.description),
         descriptionFiles: normalizeFiles(record.descriptionFiles),
+        // Only the exact marker counts. Anything else — absent, misspelt, a
+        // number — is read as the plain text every older document holds,
+        // which is the safe direction: escaping HTML shows it verbatim,
+        // whereas parsing plain text as HTML deletes part of it.
+        ...(record.descriptionFormat === "html"
+          ? { descriptionFormat: "html" as const }
+          : {}),
         // A criterion worth a fraction of a point would make the "x/y points"
         // summaries on three separate pages disagree, so clamp to whole points.
         points: Number.isFinite(points) ? Math.max(0, Math.round(points)) : 0,
@@ -372,6 +379,31 @@ const decodeHtmlEntities = (value: string) =>
  */
 export const stripResponseHtml = (response: string | undefined) =>
   decodeHtmlEntities((response ?? "").replace(/<[^>]*>/g, "")).trim();
+
+/**
+ * Turn stored plain text into HTML that renders it verbatim.
+ *
+ * `&` is escaped first, so an escape this produces is not escaped again. A
+ * lone `>` is already literal to an HTML parser and only `<` can start a tag,
+ * but it is escaped too: that is what every other escaper does, and leaving
+ * one delimiter raw invites a later reader to assume the rest are raw as well.
+ * Quotes are left alone because nothing here builds an attribute value.
+ */
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * A criterion's description as HTML the renderer can hand to the sanitizer.
+ *
+ * The one place that decides what a stored description means, so the editor,
+ * the grading page and the student's feedback page cannot disagree about it.
+ * A rubric line authored before the editor became rich text is plain text and
+ * is escaped; one the rich editor wrote is already HTML and is passed through.
+ */
+export const getCriterionDescriptionHtml = (criterion: FRQGradingCriterion) =>
+  criterion.descriptionFormat === "html"
+    ? criterion.description
+    : escapeHtml(criterion.description);
 
 /** Whether a response has anything in it, not fooled by markup-only `<p></p>`. */
 export const hasResponseText = (response: string | undefined) =>
